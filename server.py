@@ -20,10 +20,15 @@ RESTful API:
 import argparse
 import json
 import os
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 打包成 exe 后，静态资源被 PyInstaller 解包到 sys._MEIPASS
+if getattr(sys, "frozen", False):
+    ROOT_DIR = sys._MEIPASS  # type: ignore[attr-defined]
+else:
+    ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 与 .lottie 状态机输入 "states" 对应的合法取值
 VALID_STATES = ["smile", "proud", "unhappy", "daze"]

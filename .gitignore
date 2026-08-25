@@ -8,6 +8,11 @@ venv/
 # 运行时临时文件
 body.json
 
+# PyInstaller 构建产物
+build/
+dist/
+*.spec
+
 # 编辑器 / 系统
 .DS_Store
 Thumbs.db
