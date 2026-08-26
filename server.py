@@ -15,6 +15,8 @@ RESTful API:
     GET  /api/state            获取当前动画状态  -> {"state": "smile"}
     PUT  /api/state            设置动画状态      请求体: {"state": "proud"}
     GET  /api/states           列出所有可用状态   -> {"states": ["smile", "proud", "unhappy", "daze"]}
+    GET  /api/rotation         获取当前旋转角度   -> {"rotation": 0}
+    PUT  /api/rotation         设置旋转角度       请求体: {"rotation": 90}
 """
 
 import argparse
@@ -32,10 +34,21 @@ else:
 
 # 与 .lottie 状态机输入 "states" 对应的合法取值
 VALID_STATES = ["smile", "proud", "unhappy", "daze"]
+VALID_ROTATIONS = (0, 90, 180, 270)
 
 # 当前状态（内存存储），初始为 smile
 _current_state = "smile"
 _state_lock = threading.Lock()
+_current_rotation = 0
+_rotation_lock = threading.Lock()
+
+
+def set_rotation(rotation: int) -> None:
+    if type(rotation) is not int or rotation not in VALID_ROTATIONS:
+        raise ValueError(f"无效旋转角度 {rotation!r}，可用: {VALID_ROTATIONS}")
+    global _current_rotation
+    with _rotation_lock:
+        _current_rotation = rotation
 
 
 class RoboFaceHandler(BaseHTTPRequestHandler):
@@ -65,6 +78,7 @@ class RoboFaceHandler(BaseHTTPRequestHandler):
             ".css": "text/css; charset=utf-8",
             ".json": "application/json; charset=utf-8",
             ".lottie": "application/octet-stream",
+            ".wasm": "application/wasm",
         }.get(ext, "application/octet-stream")
 
         with open(file_path, "rb") as f:
@@ -116,6 +130,10 @@ class RoboFaceHandler(BaseHTTPRequestHandler):
         if path == "/api/states":
             return self._send_json(200, {"states": VALID_STATES})
 
+        if path == "/api/rotation":
+            with _rotation_lock:
+                return self._send_json(200, {"rotation": _current_rotation})
+
         return self._serve_static()
 
     def do_PUT(self):
@@ -138,6 +156,21 @@ class RoboFaceHandler(BaseHTTPRequestHandler):
                 _current_state = state
             return self._send_json(200, {"state": state})
 
+        if path == "/api/rotation":
+            body = self._read_json_body()
+            if body is None or not isinstance(body, dict):
+                return self._send_json(400, {"error": "请求体必须是 JSON 对象"})
+
+            rotation = body.get("rotation")
+            if type(rotation) is not int or rotation not in VALID_ROTATIONS:
+                return self._send_json(
+                    400,
+                    {"error": f"无效旋转角度 {rotation!r}，可用: {VALID_ROTATIONS}"},
+                )
+
+            set_rotation(rotation)
+            return self._send_json(200, {"rotation": rotation})
+
         return self._send_json(404, {"error": "not found"})
 
     def log_message(self, fmt, *args):
@@ -158,6 +191,7 @@ def main():
     print("  GET /api/state")
     print("  PUT /api/state   body: {\"state\": \"proud\"}")
     print("  GET /api/states")
+    print("  GET/PUT /api/rotation")
     print("按 Ctrl+C 停止")
     try:
         server.serve_forever()

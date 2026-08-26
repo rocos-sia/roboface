@@ -12,6 +12,7 @@ body.json
 build/
 dist/
 *.spec
+!roboface.spec
 
 # 编辑器 / 系统
 .DS_Store
