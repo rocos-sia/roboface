@@ -46,7 +46,25 @@
 
   let currentState = null;   // 已应用到动画的状态
   let currentRotation = null;
+  let rotationPolling = false;
   let smReady = false;       // 状态机是否已就绪
+
+  function resizePlayer(rotation) {
+    player.style.transform = "translate(-50%, -50%)";
+    void player.offsetWidth;
+    const dotLottie = player.dotLottie;
+    if (dotLottie?.isLoaded) {
+      dotLottie.resize();
+    }
+    player.style.transform = `translate(-50%, -50%) rotate(${rotation}deg)`;
+  }
+
+  function configureLayout() {
+    const dotLottie = player.dotLottie;
+    if (!dotLottie?.isLoaded) return;
+    dotLottie.setLayout({ fit: "contain", align: [0.5, 0.5] });
+    applyRotation(currentRotation ?? 0);
+  }
 
   // 状态机加载完成后标记就绪（statemachineid 属性会自动 load+start）
   function watchReady() {
@@ -54,10 +72,12 @@
     if (!dotLottie) return setTimeout(watchReady, 50);
     if (dotLottie.isLoaded) {
       smReady = true;
+      configureLayout();
       applyState(currentState);
     } else {
       dotLottie.addEventListener("load", () => {
         smReady = true;
+        configureLayout();
         applyState(currentState);
       });
     }
@@ -85,23 +105,27 @@
   }
 
   function applyRotation(rotation) {
+    currentRotation = rotation;
     const quarterTurn = rotation === 90 || rotation === 270;
     player.style.width = quarterTurn ? "100vh" : "100vw";
     player.style.height = quarterTurn ? "100vw" : "100vh";
-    player.style.transform = `translate(-50%, -50%) rotate(${rotation}deg)`;
-    currentRotation = rotation;
+    resizePlayer(rotation);
   }
 
   async function pollRotation() {
+    if (rotationPolling) return;
+    rotationPolling = true;
     try {
       const res = await fetch("/api/rotation");
       if (!res.ok) return;
       const { rotation } = await res.json();
       if (rotation !== currentRotation) {
-        applyRotation(rotation);
+        await applyRotation(rotation);
       }
     } catch (e) {
       console.error("轮询旋转角度失败", e);
+    } finally {
+      rotationPolling = false;
     }
   }
 

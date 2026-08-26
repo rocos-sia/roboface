@@ -82,6 +82,26 @@ class RoboFaceServerTests(unittest.TestCase):
         self.assertIn('quarterTurn ? "100vw" : "100vh"', html)
         self.assertIn("rotate(${rotation}deg)", html)
 
+    def test_html_preserves_aspect_ratio_after_rotation(self):
+        with urllib.request.urlopen(self.base_url + "/") as response:
+            html = response.read().decode("utf-8")
+
+        self.assertIn('setLayout({ fit: "contain", align: [0.5, 0.5] })', html)
+        self.assertIn("dotLottie.resize()", html)
+        self.assertIn('player.style.transform = "translate(-50%, -50%)"', html)
+        self.assertIn("void player.offsetWidth", html)
+        self.assertNotIn('player.style.visibility = "hidden"', html)
+        reset_index = html.index('player.style.transform = "translate(-50%, -50%)"')
+        layout_index = html.index("void player.offsetWidth", reset_index)
+        resize_index = html.index("dotLottie.resize()", layout_index)
+        rotate_index = html.index("rotate(${rotation}deg)", resize_index)
+        self.assertLess(reset_index, layout_index)
+        self.assertLess(layout_index, resize_index)
+        self.assertLess(resize_index, rotate_index)
+        self.assertIn("if (rotationPolling) return", html)
+        self.assertIn("rotationPolling = true", html)
+        self.assertIn("rotationPolling = false", html)
+
     def test_updates_current_state(self):
         status, payload = self.request_json(
             "/api/state", method="PUT", payload={"state": "daze"}
