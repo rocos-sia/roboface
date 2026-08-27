@@ -38,7 +38,7 @@ chmod +x roboface-linux-arm64 install-autostart.sh
 ./roboface-linux-arm64 --rotation 90
 ```
 
-关闭全屏浏览器后，为当前用户安装自启动。不要对安装脚本使用 `sudo`，否则会安装到 root 用户目录：
+关闭全屏浏览器后，为当前用户安装自启动。不要对安装脚本使用 `sudo`，否则会安装到 root 用户目录。如果要用到 GPIO，请先确认当前用户已加入 `gpio` 组（见下文「GPIO 控制」），安装脚本也会在结束时检查并提示：
 
 ```bash
 ./install-autostart.sh --binary ./roboface-linux-arm64 --rotation 90
@@ -85,6 +85,8 @@ mv ~/.config/autostart/roboface.desktop.disabled ~/.config/autostart/roboface.de
 - `GET /api/states`：列出所有合法状态。
 - `GET /api/rotation`：读取当前旋转角度。
 - `PUT /api/rotation`：动态修改旋转角度。
+- `GET /api/gpio`：读取 GPIO 17 电平。
+- `PUT /api/gpio`：设置 GPIO 17 电平（`value`：`1` 高 / `0` 低）。
 
 将 `<raspberry-pi-ip>` 替换为树莓派的局域网地址：
 
@@ -98,7 +100,26 @@ curl -X PUT http://<raspberry-pi-ip>:8000/api/rotation \
   -H 'Content-Type: application/json' \
   -d '{"rotation":270}'
 curl http://<raspberry-pi-ip>:8000/api/rotation
+curl -X PUT http://<raspberry-pi-ip>:8000/api/gpio \
+  -H 'Content-Type: application/json' \
+  -d '{"value":1}'
+curl http://<raspberry-pi-ip>:8000/api/gpio
 ```
+
+## GPIO 控制
+
+程序启动时把树莓派的 GPIO 17（BCM 编号）初始化为输出，默认低电平，并通过 REST API 读写：
+
+- `value: 1` = 高电平，`value: 0` = 低电平。
+
+实现基于 Linux sysfs 接口（`/sys/class/gpio`），只用标准库，无需 RPi.GPIO / gpiod。运行用户需要属于 `gpio` 组（或 root），否则 API 会降级为内存模拟（不驱动真实引脚）：
+
+```bash
+sudo usermod -aG gpio "$USER"
+sudo reboot
+```
+
+> sysfs GPIO 已被内核标记为 deprecated，但在 Raspberry Pi OS Bookworm（内核 6.6）上仍可用。
 
 ## 构建 arm64 可执行文件
 

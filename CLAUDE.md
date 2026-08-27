@@ -72,6 +72,13 @@ ZIP 包，含四个文件：
 - `server.py` 用 `ThreadingHTTPServer` + 内存变量 `_current_state` 存当前状态，`threading.Lock` 保护。静态文件路径做了 `normpath` 目录穿越防护，`PUT` 校验状态合法性（非法返回 400）。
 - `index.html` 前端轮询 `GET /api/state`，状态变化时调用 `stateMachineSetStringInput`。有就绪保护：等 `dotLottie.isLoaded`（或 `load` 事件）后才首次应用状态。
 
+### GPIO 控制
+
+- `gpio.py` 用 Linux sysfs 接口（`/sys/class/gpio`）把 GPIO 17（BCM）设为输出、默认低电平，只用标准库，无需 RPi.GPIO / gpiod。
+- `server.py` 与 `launcher.py` 启动时调用 `gpio.setup()`，退出时 `gpio.cleanup()`。在非树莓派 / 无 gpio 组权限时自动降级为内存模拟（`_available=False`），API 照常读写电平但不驱动引脚。
+- REST API：`GET /api/gpio` 读电平，`PUT /api/gpio` 写电平（`{"value": 1}` 高 / `{"value": 0}` 低），响应含 `pin`/`value`/`level`。
+- 运行用户需属于 `gpio` 组（`sudo usermod -aG gpio <user>`）；sysfs 已 deprecated，但在 Raspberry Pi OS Bookworm 上仍可用。
+
 ## 关键依赖与版本（易踩坑）
 
 - **`dotlottie-web` 的 CDN 路径已变更**：`dist/dotlottie-web.js` 现已 404。正确做法是用 ESM import `@lottiefiles/dotlottie-web@0.79.2/+esm` 或 `dist/index.js`。当前已锁定 `0.79.2`，不要用 `@latest`（破坏性更新风险）。

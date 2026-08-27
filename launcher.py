@@ -6,6 +6,7 @@ RoboFace 桌面启动器（用于打包成 exe）
     1. 在后台线程启动 HTTP 服务（复用 server.py）
     2. 用系统浏览器（Edge/Chrome）全屏(kiosk)打开页面
     3. 服务持续运行，随时可通过 RESTful API 切换动画状态
+    4. 初始化 GPIO 17 为输出（默认低电平），可通过 API 设置高低电平
 
 退出方式: 关闭浏览器或按 Ctrl+C，程序会同时停止 HTTP 服务。
 """
@@ -21,6 +22,7 @@ import threading
 import time
 from http.server import ThreadingHTTPServer
 
+import gpio
 import server
 
 
@@ -116,6 +118,8 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
 
 def main(rotation: int = 0) -> int:
     server.set_rotation(rotation)
+    if not gpio.setup():
+        log("警告: GPIO 不可用（非树莓派或权限不足），降级为内存模拟")
     port = find_free_port()
     url = f"http://localhost:{port}/"
     httpd = ThreadingHTTPServer(("0.0.0.0", port), server.RoboFaceHandler)
@@ -155,6 +159,7 @@ def main(rotation: int = 0) -> int:
                 proc.kill()
                 proc.wait()
     finally:
+        gpio.cleanup()
         httpd.shutdown()
         httpd.server_close()
         if user_data_dir is not None:

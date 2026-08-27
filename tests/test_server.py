@@ -5,6 +5,7 @@ import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 
+import gpio
 import server
 
 
@@ -30,6 +31,9 @@ class RoboFaceServerTests(unittest.TestCase):
         if hasattr(server, "_rotation_lock"):
             with server._rotation_lock:
                 server._current_rotation = 0
+        with gpio._lock:
+            gpio._available = None
+            gpio._level = gpio.LOW
 
     def request_json(self, path, method="GET", payload=None):
         data = None
@@ -122,6 +126,35 @@ class RoboFaceServerTests(unittest.TestCase):
 
         status, payload = self.request_json("/api/rotation")
         self.assertEqual((status, payload), (200, {"rotation": 90}))
+
+    def test_reads_gpio_defaults_to_low(self):
+        status, payload = self.request_json("/api/gpio")
+
+        self.assertEqual(
+            (status, payload), (200, {"pin": 17, "value": 0, "level": "low"})
+        )
+
+    def test_updates_gpio_level(self):
+        status, payload = self.request_json(
+            "/api/gpio", method="PUT", payload={"value": 1}
+        )
+        self.assertEqual(
+            (status, payload), (200, {"pin": 17, "value": 1, "level": "high"})
+        )
+
+        status, payload = self.request_json("/api/gpio")
+        self.assertEqual(
+            (status, payload), (200, {"pin": 17, "value": 1, "level": "high"})
+        )
+
+    def test_rejects_invalid_gpio_value(self):
+        for value in (2, -1, "1", 1.0, True, None):
+            with self.subTest(value=value):
+                with self.assertRaises(urllib.error.HTTPError) as context:
+                    self.request_json(
+                        "/api/gpio", method="PUT", payload={"value": value}
+                    )
+                self.assertEqual(context.exception.code, 400)
 
     def test_rejects_unsupported_rotation(self):
         with self.assertRaises(urllib.error.HTTPError) as context:

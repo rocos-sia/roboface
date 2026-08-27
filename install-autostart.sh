@@ -16,6 +16,21 @@ is_option_token() {
     esac
 }
 
+check_gpio_group() {
+    local user
+    user="$(id -un)"
+    if id -nG "$user" 2>/dev/null | tr ' ' '\n' | grep -qx gpio; then
+        return 0
+    fi
+    cat >&2 <<EOF
+提示: 当前用户 "$user" 不在 gpio 组，RoboFace 将无法驱动 GPIO 17（REST API 会降级为内存模拟）。
+如需使用 GPIO，请执行以下命令后重新登录（或重启）：
+
+    sudo usermod -aG gpio "$user"
+    sudo reboot
+EOF
+}
+
 binary=""
 rotation="0"
 rotation_set=false
@@ -148,3 +163,4 @@ backup_binary=""
 echo "RoboFace 已安装: $installed_binary"
 echo "桌面自启动已启用: $desktop_entry"
 echo "启动旋转角度: $rotation"
+check_gpio_group

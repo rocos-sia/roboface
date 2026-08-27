@@ -123,6 +123,15 @@ class LauncherLifecycleTests(unittest.TestCase):
         self.assertEqual(result, 0)
         set_rotation.assert_called_once_with(90)
 
+    @patch("launcher.gpio.setup")
+    @patch("launcher.gpio.cleanup")
+    def test_main_initializes_and_releases_gpio(self, gpio_cleanup, gpio_setup):
+        result, _, _, _ = self.run_main()
+
+        self.assertEqual(result, 0)
+        gpio_setup.assert_called_once_with()
+        gpio_cleanup.assert_called_once_with()
+
     def test_main_returns_error_when_chromium_is_missing(self):
         result, httpd, _, _ = self.run_main(browser=None)
 

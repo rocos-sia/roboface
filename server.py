@@ -17,6 +17,8 @@ RESTful API:
     GET  /api/states           列出所有可用状态   -> {"states": ["smile", "proud", "unhappy", "daze"]}
     GET  /api/rotation         获取当前旋转角度   -> {"rotation": 0}
     PUT  /api/rotation         设置旋转角度       请求体: {"rotation": 90}
+    GET  /api/gpio             获取 GPIO 17 电平   -> {"pin": 17, "value": 0, "level": "low"}
+    PUT  /api/gpio             设置 GPIO 17 电平   请求体: {"value": 1}  (1 高 / 0 低)
 """
 
 import argparse
@@ -25,6 +27,8 @@ import os
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import gpio
 
 # 打包成 exe 后，静态资源被 PyInstaller 解包到 sys._MEIPASS
 if getattr(sys, "frozen", False):
@@ -134,6 +138,17 @@ class RoboFaceHandler(BaseHTTPRequestHandler):
             with _rotation_lock:
                 return self._send_json(200, {"rotation": _current_rotation})
 
+        if path == "/api/gpio":
+            value = gpio.get_level()
+            return self._send_json(
+                200,
+                {
+                    "pin": gpio.GPIO_PIN,
+                    "value": value,
+                    "level": "high" if value else "low",
+                },
+            )
+
         return self._serve_static()
 
     def do_PUT(self):
@@ -171,6 +186,28 @@ class RoboFaceHandler(BaseHTTPRequestHandler):
             set_rotation(rotation)
             return self._send_json(200, {"rotation": rotation})
 
+        if path == "/api/gpio":
+            body = self._read_json_body()
+            if body is None or not isinstance(body, dict):
+                return self._send_json(400, {"error": "请求体必须是 JSON 对象"})
+
+            value = body.get("value")
+            if type(value) is not int or value not in (gpio.LOW, gpio.HIGH):
+                return self._send_json(
+                    400,
+                    {"error": f"无效电平 {value!r}，只能是 0（低）或 1（高）"},
+                )
+
+            gpio.set_level(value)
+            return self._send_json(
+                200,
+                {
+                    "pin": gpio.GPIO_PIN,
+                    "value": value,
+                    "level": "high" if value else "low",
+                },
+            )
+
         return self._send_json(404, {"error": "not found"})
 
     def log_message(self, fmt, *args):
@@ -185,6 +222,7 @@ def main():
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
+    gpio_ready = gpio.setup()
     server = ThreadingHTTPServer((args.host, args.port), RoboFaceHandler)
     print(f"RoboFace 服务已启动: http://localhost:{args.port}")
     print("REST API:")
@@ -192,11 +230,18 @@ def main():
     print("  PUT /api/state   body: {\"state\": \"proud\"}")
     print("  GET /api/states")
     print("  GET/PUT /api/rotation")
+    print("  GET/PUT /api/gpio   body: {\"value\": 1}   (1 高 / 0 低)")
+    if gpio_ready:
+        print(f"GPIO {gpio.GPIO_PIN} 已初始化为输出，默认低电平")
+    else:
+        print(f"警告: GPIO {gpio.GPIO_PIN} 不可用（非树莓派或权限不足），降级为内存模拟")
     print("按 Ctrl+C 停止")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n已停止")
+    finally:
+        gpio.cleanup()
 
 
 if __name__ == "__main__":
