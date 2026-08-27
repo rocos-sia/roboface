@@ -38,7 +38,7 @@ chmod +x roboface-linux-arm64 install-autostart.sh
 ./roboface-linux-arm64 --rotation 90
 ```
 
-关闭全屏浏览器后，为当前用户安装自启动。不要对安装脚本使用 `sudo`，否则会安装到 root 用户目录。如果要用到 GPIO，请先确认当前用户已加入 `gpio` 组（见下文「GPIO 控制」），安装脚本也会在结束时检查并提示：
+关闭全屏浏览器后，为当前用户安装自启动。不要对安装脚本使用 `sudo`，否则会安装到 root 用户目录。安装脚本会在结束时检查当前用户能否访问 GPIO character device 并给出提示：
 
 ```bash
 ./install-autostart.sh --binary ./roboface-linux-arm64 --rotation 90
@@ -112,14 +112,15 @@ curl http://<raspberry-pi-ip>:8000/api/gpio
 
 - `value: 1` = 高电平，`value: 0` = 低电平。
 
-实现基于 Linux sysfs 接口（`/sys/class/gpio`），只用标准库，无需 RPi.GPIO / gpiod。运行用户需要属于 `gpio` 组（或 root），否则 API 会降级为内存模拟（不驱动真实引脚）：
+实现使用官方 `gpiod` 2.5.0 Python bindings 和 Linux GPIO character device。程序会遍历 `/dev/gpiochip*` 并按名称查找 `GPIO17`，不依赖固定的 gpiochip 编号，因此可适配 GPIO controller 编号不同的树莓派型号。arm64 可执行文件已经包含该依赖，无需另外安装 Python 包。
+
+运行用户必须能够读写对应的 GPIO character device。可以使用以下命令检查设备及权限：
 
 ```bash
-sudo usermod -aG gpio "$USER"
-sudo reboot
+ls -l /dev/gpiochip*
 ```
 
-> sysfs GPIO 已被内核标记为 deprecated，但在 Raspberry Pi OS Bookworm（内核 6.6）上仍可用。
+如果设备不存在、权限不足、GPIO17 已被其他进程占用，API 会自动降级为内存模拟，不会中断动画。请通过系统的 udev 规则或设备 ACL 为运行用户配置访问权限。
 
 ## 构建 arm64 可执行文件
 
@@ -137,6 +138,8 @@ chmod +x build-raspberry-pi.sh
 ## 本地源码运行
 
 ```bash
+# 在树莓派上需要真实 GPIO 控制时安装；Windows 开发机可跳过
+python3 -m pip install gpiod==2.5.0
 python3 server.py
 ```
 
@@ -146,6 +149,7 @@ python3 server.py
 
 - `@lottiefiles/dotlottie-wc` 0.9.27
 - `@lottiefiles/dotlottie-web` 0.79.2
+- `gpiod` 2.5.0
 
 SHA-256：
 

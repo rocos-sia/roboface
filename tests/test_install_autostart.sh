@@ -6,6 +6,12 @@ installer="$root_dir/install-autostart.sh"
 temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
 
+grep -F "/dev/gpiochip" "$installer"
+if grep -Fq "usermod -aG gpio" "$installer"; then
+    echo "installer still contains obsolete sysfs gpio-group guidance" >&2
+    exit 1
+fi
+
 export HOME="$temp_dir/home with space"
 mkdir -p "$HOME"
 

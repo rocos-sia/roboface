@@ -15,7 +15,8 @@ RoboFace 是一个机器人脸动画播放器。核心资产是 `RoboFace.lottie
 ## 常用命令
 
 ```bash
-# 启动 Web 服务（默认 0.0.0.0:8000，纯标准库，无需 pip install）
+# 启动 Web 服务（默认 0.0.0.0:8000；真实 GPIO 需要 gpiod）
+pip install gpiod==2.5.0  # 仅 Linux/树莓派；其他环境自动使用内存模拟
 python server.py
 python server.py --port 9000
 ./run.bat   # Windows
@@ -74,13 +75,15 @@ ZIP 包，含四个文件：
 
 ### GPIO 控制
 
-- `gpio.py` 用 Linux sysfs 接口（`/sys/class/gpio`）把 GPIO 17（BCM）设为输出、默认低电平，只用标准库，无需 RPi.GPIO / gpiod。
-- `server.py` 与 `launcher.py` 启动时调用 `gpio.setup()`，退出时 `gpio.cleanup()`。在非树莓派 / 无 gpio 组权限时自动降级为内存模拟（`_available=False`），API 照常读写电平但不驱动引脚。
+- `gpio.py` 使用官方 `gpiod==2.5.0` Python bindings 和 Linux GPIO character device，把 GPIO 17（BCM）设为输出、默认低电平。
+- 初始化时遍历 `/dev/gpiochip*`，按名称 `GPIO17` 定位 line，不硬编码 gpiochip 编号；`LineRequest` 在程序生命周期内保持打开，所有操作用 `RLock` 串行化。
+- `server.py` 与 `launcher.py` 启动时调用 `gpio.setup()`，退出时 `gpio.cleanup()`。在非树莓派、缺少依赖、设备权限不足、line 被占用或写入失败时自动降级为内存模拟（`_available=False`），API 照常读写电平但不驱动引脚。
 - REST API：`GET /api/gpio` 读电平，`PUT /api/gpio` 写电平（`{"value": 1}` 高 / `{"value": 0}` 低），响应含 `pin`/`value`/`level`。
-- 运行用户需属于 `gpio` 组（`sudo usermod -aG gpio <user>`）；sysfs 已 deprecated，但在 Raspberry Pi OS Bookworm 上仍可用。
+- 运行用户需能读写对应的 `/dev/gpiochip*`；安装脚本会检查设备权限并提示。arm64 PyInstaller 产物内置 gpiod，无需运行时安装。
 
 ## 关键依赖与版本（易踩坑）
 
+- **`gpiod` Python bindings**：固定 `2.5.0`，使用 v2 API；旧的非官方 `gpiod<=1.5.4` API 不兼容。该包只支持 Linux，Windows/CI 无设备环境通过内存模拟和 fake binding 测试。
 - **`dotlottie-web` 的 CDN 路径已变更**：`dist/dotlottie-web.js` 现已 404。正确做法是用 ESM import `@lottiefiles/dotlottie-web@0.79.2/+esm` 或 `dist/index.js`。当前已锁定 `0.79.2`，不要用 `@latest`（破坏性更新风险）。
 - **`dotlottie-web` 状态机 API 方法名**：新版是 `stateMachineLoad` / `stateMachineStart` / `stateMachineSetStringInput`（旧名 `loadStateMachine` / `startStateMachine` / `setStateMachineStringInput` 已废弃）。
 - **`dotlottie-wc`（Web 组件）**：自定义元素 `<dotlottie-wc>`；`stateMachineId` 属性名在 HTML 里是全小写 `statemachineid`；组件实例通过 `.dotLottie` 属性暴露。

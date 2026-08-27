@@ -17,6 +17,7 @@ python3 -m venv .venv-build
 source .venv-build/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-build.txt
+python -c "import gpiod; print(gpiod.__version__)"
 python -m unittest discover -s tests -v
 pyinstaller --clean --noconfirm roboface.spec
 

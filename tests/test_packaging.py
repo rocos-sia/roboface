@@ -22,12 +22,12 @@ class PackagingManifestTests(unittest.TestCase):
                 self.assertIn(required, spec)
         self.assertIn('name="roboface-linux-arm64"', spec)
 
-    def test_build_dependency_is_pinned(self):
+    def test_build_dependencies_are_pinned(self):
         path = ROOT / "requirements-build.txt"
         self.assertTrue(path.is_file(), "requirements-build.txt must exist")
         self.assertEqual(
             path.read_text(encoding="utf-8").splitlines(),
-            ["pyinstaller==6.15.0"],
+            ["pyinstaller==6.15.0", "gpiod==2.5.0"],
         )
 
     def test_native_build_script_checks_platform_and_builds(self):
@@ -42,6 +42,7 @@ class PackagingManifestTests(unittest.TestCase):
             "aarch64",
             ".venv-build",
             "requirements-build.txt",
+            'python -c "import gpiod; print(gpiod.__version__)"',
             "python -m unittest discover -s tests -v",
             "pyinstaller --clean --noconfirm roboface.spec",
             "dist/roboface-linux-arm64",
@@ -69,9 +70,11 @@ class PackagingManifestTests(unittest.TestCase):
             "X-GNOME-Autostart-enabled=true",
             "mktemp",
             "mv -f",
+            "/dev/gpiochip",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, installer)
+        self.assertNotIn("usermod -aG gpio", installer)
 
 
 class DeliveryDocumentationTests(unittest.TestCase):
